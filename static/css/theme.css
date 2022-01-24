@@ -1,0 +1,64 @@
+:root {
+    font-family: "Roboto Mono", "JetBrains Mono", "Fira Code", Consolas, "Courier New", Courier, monospace;
+    font-size: large;
+}
+
+[data-select] {
+    user-select: text;
+}
+
+* {
+    all: unset;
+    box-sizing: border-box;
+}
+
+body {
+    display: block;
+    user-select: none;
+
+    background-color: #1e1e3f;
+    color: #ffffff;
+}
+
+area,
+datalist,
+link,
+param,
+script,
+style,
+title {
+    display: none;
+}
+
+h1 {
+    font-size: 4rem;
+    display: block;
+    font-weight: bold;
+}
+
+a {
+    display: inline;
+    text-decoration: underline;
+    font-style: italic;
+    color: #e0d01b;
+    cursor: pointer;
+}
+
+table,
+tbody {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+table tr {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.2em;
+}
+
+table th::after {
+    content: ":";
+}
