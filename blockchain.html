@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+
+        <script type="application/javascript">
+            function bufferEncoder(_, value) {
+                if (value instanceof ArrayBuffer) {
+                    return new TextDecoder("ISO-8859-1").decode(value);
+                }
+
+                return value;
+            }
+
+            async function hashObject(o) {
+                return new BigUint64Array(
+                    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(o, bufferEncoder)))
+                );
+            }
+
+            function countBits(n) {
+                const one = Object.getPrototypeOf(n).constructor(1);
+
+                let count = 0;
+                while (n) {
+                    n &= n - one;
+                    count++;
+                }
+
+                return count;
+            }
+
+            async function makeBlock(data, previous, difficulty) {
+                const now = Date.now();
+
+                const block = {
+                    parent: previous?.hash ?? null,
+                    timestamp: 0,
+                    difficulty,
+                    nonce: 0,
+                    hash: new ArrayBuffer(32),
+                    data,
+                };
+
+                let min = Infinity;
+                while (true) {
+                    block.timestamp = Date.now();
+                    block.nonce = crypto.getRandomValues(new Uint32Array(1))[0];
+
+                    const hash = await hashObject(block);
+
+                    let bitCount = 0;
+                    for (const n of hash) {
+                        bitCount += countBits(n);
+                    }
+
+                    if (bitCount <= 128 - difficulty) {
+                        new BigUint64Array(block.hash).set(hash);
+                        return block;
+                    } else if (bitCount < min) {
+                        min = bitCount;
+                        const diff = 128 - min;
+                        const time = Date.now() - now;
+                    }
+                }
+            }
+
+            async function* makeChain(data, difficulty) {
+                let previous = null;
+
+                for (const d of data) {
+                    const block = await makeBlock(d, previous, difficulty);
+                    yield block;
+                    previous = block;
+                }
+            }
+
+            async function verifyChain(chain) {
+                let previous = null;
+
+                for (const block of chain) {
+                    if (previous?.hash && block.parent !== previous.hash) {
+                        return false;
+                    }
+
+                    const hash = await hashObject({ ...block, hash: new ArrayBuffer(32) });
+
+                    let bitCount = 0;
+                    for (const n of hash) {
+                        bitCount += countBits(n);
+                    }
+
+                    if (bitCount > 128 - block.difficulty) {
+                        return false;
+                    }
+
+                    previous = block;
+                }
+
+                return true;
+            }
+        </script>
+    </head>
+    <body>
+        <pre><samp></samp></pre>
+
+        <script type="application/javascript">
+            const log = document.querySelector("samp");
+
+            function print(...args) {
+                log.textContent += args.join(" ") + "\n";
+            }
+
+            (async () => {
+                const data = ["Hello", "World", "Foo", "Bar", "Baz"];
+
+                const chain = [];
+                const start = performance.now();
+                for await (const block of makeChain(data, 32)) {
+                    chain.push(block);
+                    print(JSON.stringify(block, bufferEncoder, 4));
+                }
+                const end = performance.now();
+
+                const valid = await verifyChain(chain);
+                console.log("Chain is valid:", valid);
+
+                print(valid ? "✔️" : "❌", "Chain is valid");
+                print(`⏱️ ${end - start}ms`);
+            })();
+        </script>
+    </body>
+</html>
