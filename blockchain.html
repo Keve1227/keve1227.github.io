@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Document</title>
+        <title>Blockchain</title>
 
         <script type="application/javascript">
             function bufferEncoder(_, value) {
@@ -44,27 +44,37 @@
                     data,
                 };
 
-                let min = Infinity;
-                while (true) {
-                    block.timestamp = Date.now();
-                    block.nonce = crypto.getRandomValues(new Uint32Array(1))[0];
+                let done = false;
+                await Promise.race(
+                    [...new Array(6)].map(async () => {
+                        while (true) {
+                            const timestamp = Date.now();
+                            block.timestamp = timestamp;
 
-                    const hash = await hashObject(block);
+                            const nonce = crypto.getRandomValues(new Uint32Array(1))[0];
+                            block.nonce = nonce;
 
-                    let bitCount = 0;
-                    for (const n of hash) {
-                        bitCount += countBits(n);
-                    }
+                            const hash = await hashObject(block);
+                            if (done) return;
 
-                    if (bitCount <= 128 - difficulty) {
-                        new BigUint64Array(block.hash).set(hash);
-                        return block;
-                    } else if (bitCount < min) {
-                        min = bitCount;
-                        const diff = 128 - min;
-                        const time = Date.now() - now;
-                    }
-                }
+                            let bitCount = 0;
+                            for (const n of hash) {
+                                bitCount += countBits(n);
+                            }
+
+                            if (bitCount <= 128 - difficulty) {
+                                block.timestamp = timestamp;
+                                block.nonce = nonce;
+                                new BigUint64Array(block.hash).set(hash);
+
+                                done = true;
+                                return;
+                            }
+                        }
+                    })
+                );
+
+                return block;
             }
 
             async function* makeChain(data, difficulty) {
@@ -111,24 +121,32 @@
 
             function print(...args) {
                 log.textContent += args.join(" ") + "\n";
+                window.scrollTo(0, document.body.scrollHeight);
             }
 
             (async () => {
                 const data = ["Hello", "World", "Foo", "Bar", "Baz"];
-
                 const chain = [];
+
                 const start = performance.now();
-                for await (const block of makeChain(data, 32)) {
-                    chain.push(block);
-                    print(JSON.stringify(block, bufferEncoder, 4));
+                {
+                    print("⛏️ Mining...");
+                    for await (const block of makeChain(data.slice(0, -1), 36)) {
+                        chain.push(block);
+                        print(JSON.stringify(block, bufferEncoder, 4));
+                        print("⛏️ Mining...");
+                    }
+
+                    chain.push(await makeBlock(data.at(-1), chain.at(-1), 36));
+                    print(JSON.stringify(chain.at(-1), bufferEncoder, 4));
                 }
                 const end = performance.now();
+                print(`⏱️ ${end - start}ms, ${((end - start) / chain.length).toFixed(2)}ms per block`);
 
+                print("🔗 Verifying...");
                 const valid = await verifyChain(chain);
-                console.log("Chain is valid:", valid);
 
-                print(valid ? "✔️" : "❌", "Chain is valid");
-                print(`⏱️ ${end - start}ms`);
+                print(valid ? "✔️ Chain is valid" : "❌ Chain is invalid");
             })();
         </script>
     </body>
