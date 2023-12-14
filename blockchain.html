@@ -27,6 +27,10 @@
                 padding: 0;
             }
 
+            .rail {
+                height: calc(100lvh - 100dvh);
+            }
+
             pre {
                 margin: 0;
                 padding: 1rem;
@@ -151,13 +155,15 @@
     </head>
     <body>
         <pre><samp></samp></pre>
+        <div class="rail"></div>
 
         <script type="application/javascript">
             const log = document.querySelector("samp");
+            const rail = document.querySelector(".rail");
 
             function print(...args) {
                 log.textContent += args.join(" ") + "\n";
-                window.scrollTo(0, document.body.scrollHeight);
+                rail.scrollIntoView(false);
             }
 
             (async () => {
