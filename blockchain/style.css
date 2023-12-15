@@ -1,0 +1,59 @@
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    background-color: #18161e;
+    color: #f7f7f7;
+
+    font-family: monospace;
+    font-size: 16px;
+    line-height: 1.5;
+
+    scrollbar-width: thin;
+    overflow-y: scroll;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+}
+
+.rail {
+    height: calc(100lvh - 100dvh);
+}
+
+pre {
+    margin: 0;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+samp {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+p {
+    margin: 0;
+    padding: 0;
+    margin-bottom: 0.5em;
+}
+
+.json-string {
+    color: #d5ff80;
+}
+
+.json-number {
+    color: #ffad66;
+}
+
+.json-number .json-unary-sign {
+    color: #f29e74;
+}
+
+.json-constant {
+    color: #dfbfff;
+}
