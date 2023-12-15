@@ -43,110 +43,144 @@
                 margin: 0;
                 padding: 0;
             }
+
+            p {
+                margin: 0;
+                padding: 0;
+                margin-bottom: 0.5em;
+            }
         </style>
 
         <script type="application/javascript">
-            function bufferEncoder(_, value) {
-                if (value instanceof ArrayBuffer) {
-                    return new TextDecoder("ISO-8859-1").decode(value);
-                }
-
-                return value;
-            }
-
-            async function hashObject(o) {
-                return new BigUint64Array(
-                    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(o, bufferEncoder)))
-                );
+            function bufferToString(buf) {
+                return new TextDecoder("ISO-8859-1").decode(buf);
             }
 
             function countBits(n) {
-                const one = Object.getPrototypeOf(n).constructor(1);
-
                 let count = 0;
                 while (n) {
-                    n &= n - one;
+                    n &= n - 1;
                     count++;
                 }
 
                 return count;
             }
 
-            async function makeBlock(data, previous, difficulty) {
-                const now = Date.now();
+            async function digestBlock(block) {
+                return crypto.subtle.digest(
+                    "SHA-256",
+                    new TextEncoder().encode(JSON.stringify({ ...block, hash: undefined }))
+                );
+            }
 
-                const block = {
-                    parent: previous?.hash ?? null,
-                    timestamp: 0,
-                    difficulty,
-                    nonce: 0,
-                    hash: new ArrayBuffer(32),
-                    data,
-                };
-
+            async function makeBlock(data, parent, options = {}) {
+                const { difficulty = 36, signal = AbortSignal.timeout(60000) } = options;
                 let done = false;
-                await Promise.race(
+
+                const block = await Promise.race(
                     [...new Array(6)].map(async () => {
                         while (true) {
-                            const timestamp = Date.now();
-                            block.timestamp = timestamp;
+                            const block = {
+                                parent: parent?.hash ?? null,
+                                timestamp: Date.now(),
+                                difficulty,
+                                nonce: crypto.getRandomValues(new Uint32Array(1))[0],
+                                hash: undefined,
+                                data,
+                            };
 
-                            const nonce = crypto.getRandomValues(new Uint32Array(1))[0];
-                            block.nonce = nonce;
-
-                            const hash = await hashObject(block);
+                            const hash = await digestBlock(block);
                             if (done) return;
 
+                            if (signal?.aborted) {
+                                throw new Error(signal.reason);
+                            }
+
                             let bitCount = 0;
-                            for (const n of hash) {
+                            for (const n of new Uint8Array(hash)) {
                                 bitCount += countBits(n);
                             }
 
-                            if (bitCount <= 128 - difficulty) {
-                                block.timestamp = timestamp;
-                                block.nonce = nonce;
-                                new BigUint64Array(block.hash).set(hash);
-
+                            if (bitCount >= 128 + difficulty) {
                                 done = true;
-                                return;
+                                block.hash = bufferToString(hash);
+                                return block;
                             }
                         }
                     })
                 );
 
+                if (signal?.aborted) {
+                    throw new Error(signal.reason);
+                }
+
                 return block;
             }
 
-            async function* makeChain(data, difficulty) {
-                let previous = null;
+            async function verifyBlock(block, parent = null) {
+                if (parent) {
+                    if (block.parent !== parent.hash) {
+                        return false;
+                    }
+
+                    if (block.timestamp < parent.timestamp) {
+                        return false;
+                    }
+
+                    if (block.difficulty < parent.difficulty) {
+                        return false;
+                    }
+                }
+
+                const hash = await digestBlock(block);
+
+                if (block.hash !== bufferToString(hash)) {
+                    return false;
+                }
+
+                let bitCount = 0;
+                for (const n of new Uint8Array(hash)) {
+                    bitCount += countBits(n);
+                }
+
+                if (bitCount < 128 + block.difficulty) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            async function* makeChain(data, options = {}) {
+                const { signal } = options;
+                let parent = null;
 
                 for (const d of data) {
-                    const block = await makeBlock(d, previous, difficulty);
-                    yield block;
-                    previous = block;
+                    const block = await makeBlock(d, parent, options);
+
+                    if (signal?.aborted) {
+                        throw new Error(signal.reason);
+                    }
+
+                    yield (parent = block);
                 }
             }
 
-            async function verifyChain(chain) {
-                let previous = null;
+            async function verifyChain(chain, options = {}) {
+                const { signal = AbortSignal.timeout(60000) } = options;
+                let parent = null;
 
                 for (const block of chain) {
-                    if (previous?.hash && block.parent !== previous.hash) {
+                    const valid = await verifyBlock(block, parent);
+
+                    if (signal?.aborted) {
+                        throw new Error(signal.reason);
+                    }
+
+                    if (!valid) {
                         return false;
                     }
 
-                    const hash = await hashObject({ ...block, hash: new ArrayBuffer(32) });
-
-                    let bitCount = 0;
-                    for (const n of hash) {
-                        bitCount += countBits(n);
-                    }
-
-                    if (bitCount > 128 - block.difficulty) {
-                        return false;
-                    }
-
-                    previous = block;
+                    parent = block;
                 }
 
                 return true;
@@ -162,28 +196,42 @@
             const rail = document.querySelector(".rail");
 
             function print(...args) {
-                log.textContent += args.join(" ") + "\n";
-                rail.scrollIntoView(false);
+                const row = document.createElement("p");
+                row.textContent = args.join(" ");
+                log.appendChild(row);
+                rail.scrollIntoView({ behavior: "smooth", block: "end" });
             }
 
             (async () => {
                 const data = ["Hello", "World", "Foo", "Bar", "Baz"];
                 const chain = [];
 
-                const start = performance.now();
-                {
+                performance.mark("mining_start");
+                try {
                     print("⛏️ Mining...");
-                    for await (const block of makeChain(data.slice(0, -1), 36)) {
+                    for await (const block of makeChain(data.slice(0, -1), { difficulty: 36 })) {
                         chain.push(block);
-                        print(JSON.stringify(block, bufferEncoder, 4));
+                        print(JSON.stringify(block, null, 4));
                         print("⛏️ Mining...");
                     }
 
-                    chain.push(await makeBlock(data.at(-1), chain.at(-1), 36));
-                    print(JSON.stringify(chain.at(-1), bufferEncoder, 4));
+                    chain.push(await makeBlock(data.at(-1), chain.at(-1), { difficulty: 36 }));
+                    print(JSON.stringify(chain.at(-1), null, 4));
+                } catch (e) {
+                    console.error(e);
+                    print(`⚠️ Mining failed (${e.message ?? "Unknown error"})`);
                 }
-                const end = performance.now();
-                print(`⏱️ ${end - start}ms, ${((end - start) / chain.length).toFixed(2)}ms per block`);
+                performance.mark("mining_end");
+
+                const duration = performance.measure("mining", "mining_start", "mining_end").duration / 1000;
+                print(`⏱️ ${duration.toFixed(2)}s total`);
+
+                if (chain.length === 0) {
+                    print(`⁉️ No blocks mined`);
+                    return;
+                }
+
+                print(`📈 ${(duration / chain.length).toFixed(2)}s per block`);
 
                 print("🔗 Verifying...");
                 const valid = await verifyChain(chain);
