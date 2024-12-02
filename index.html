@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="sv">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Kevin Sundqvist Norlén</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet" />
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            :root {
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            :has(body),
+            body {
+                height: 100%;
+                width: 100%;
+            }
+
+            body {
+                background-color: lch(100 0 0);
+                color: lch(0 0 0);
+                cursor: pointer;
+                display: flex;
+                font-weight: 700;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                transition: background-color 200ms ease-in-out, color 200ms ease-in-out;
+                user-select: none;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Kevin Sundqvist Norlén</h1>
+        <script>
+            function randomColor() {
+                return {
+                    l: Math.random() * 100,
+                    c: Math.random() * 100,
+                    h: Math.random() * 360,
+                    toString() {
+                        return `lch(${this.l.toFixed(4)} ${this.c.toFixed(4)} ${this.h.toFixed(4)})`;
+                    },
+                };
+            }
+
+            function randomizeBackgroundColor() {
+                const color = randomColor();
+                document.body.style.backgroundColor = color;
+                document.body.style.color = {
+                    ...color,
+                    l: 0.5 * (color.l > 50 ? 0 : 100) + 0.5 * ((color.l * 2) % 100),
+                    c: (0.5 - 0.5 * (color.c / 100 - 1) ** 2) * 100,
+                };
+            }
+
+            let clickCount = 0;
+
+            document.body.addEventListener("click", () => {
+                clickCount++;
+
+                if (clickCount >= 10) {
+                    location.href = "https://github.com/keve1227";
+                } else {
+                    randomizeBackgroundColor();
+                }
+            });
+        </script>
+    </body>
+</html>
